@@ -27,10 +27,12 @@
 
 -module(riak_core_metadata_rla_backend).
 
+-compile({no_auto_import, [register/2]}).
+
 -behaviour(riak_net_rla_db).
 
 -export([init/1, close/0, purge/0,
-         get/1, put/2, delete/1, list/1]).
+         register/2, deregister/1, lookup/1, list/1]).
 
 -define(RLA_METADATA_PREFIX, {rla, records}).
 
@@ -64,9 +66,12 @@ purge_(It) ->
     end.
 
 
--spec get(riak_net_rla:url_as_key()) ->
+-spec lookup(riak_net_rla:url()) ->
                  {ok, [riak_net_rla:ep()]} | {error, not_found} | {error, term()}.
-get(Url) ->
+lookup(Url) when is_list(Url) ->
+    lookup(list_to_binary(Url));
+lookup(Url_) ->
+    Url = riak_net_rla:abs_path(Url_),
     case riak_core_metadata:get(?RLA_METADATA_PREFIX, Url) of
         undefined ->
             {error, not_found};
@@ -79,8 +84,11 @@ get(Url) ->
     end.
 
 
--spec put(riak_net_rla:url_as_key(), [riak_net_rla:ep()]) -> ok.
-put(Url, EPList) ->
+-spec register(riak_net_rla:url(), [riak_net_rla:ep()]) -> ok.
+register(Url, EPList) when is_list(Url) ->
+    register(list_to_binary(Url), EPList);
+register(Url_, EPList) ->
+    Url = riak_net_rla:abs_path(Url_),
     %% this is necessary to overwrite the old value with a new timestamp
     case riak_core_metadata:get(?RLA_METADATA_PREFIX, Url) of
         undefined ->
@@ -92,8 +100,11 @@ put(Url, EPList) ->
            ?RLA_METADATA_PREFIX, Url, {EPList, os:timestamp()}).
 
 
--spec delete(riak_net_rla:url_as_key()) -> ok.
-delete(Url) ->
+-spec deregister(riak_net_rla:url()) -> ok.
+deregister(Url) when is_list(Url) ->
+    deregister(list_to_binary(Url));
+deregister(Url_) ->
+    Url = riak_net_rla:abs_path(Url_),
     ok = riak_core_metadata:delete(?RLA_METADATA_PREFIX, Url).
 %% Because riak_core takes care of propagating deletions across all
 %% metadata holding nodes, we don't have to contrive our own
@@ -102,9 +113,12 @@ delete(Url) ->
 %% single cluster).
 
 
--spec list(riak_net_rla:url_as_key()) ->
+-spec list(riak_net_rla:url()) ->
                   {ok, [riak_net_rla:path_element()]} | {error, term()}.
-list(UrlPrefix) ->
+list(UrlPrefix) when is_list(UrlPrefix) ->
+    list(list_to_binary(UrlPrefix));
+list(UrlPrefix_) ->
+    UrlPrefix = riak_net_rla:abs_path(UrlPrefix_),
     UrlPrefixLen = length(UrlPrefix),
     Children =
         riak_core_metadata:fold(
