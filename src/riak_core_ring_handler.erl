@@ -103,7 +103,7 @@ maybe_shutdown(Ring) ->
 
 exit_ring_trans() ->
     riak_core_ring_manager:ring_trans(
-        fun(Ring2, _) -> 
+        fun(Ring2, _) ->
                 Ring3 = riak_core_ring:exit_member(node(), Ring2, node()),
                 {new_ring, Ring3}
         end, []).
@@ -112,7 +112,7 @@ ready_to_exit([]) ->
     true;
 ready_to_exit([{_App, Mod} | AppMods]) ->
     case erlang:function_exported(Mod, ready_to_exit, 0) andalso
-             (not Mod:ready_to_exit()) of 
+             (not Mod:ready_to_exit()) of
         true ->
             false;
         false ->
@@ -156,15 +156,18 @@ ensure_vnodes_started({App,Mod}, Ring) ->
                        end,
 
                        %% Mark the service as up.
-                       SupName = list_to_atom(atom_to_list(App) ++ "_sup"),
-                       SupPid = erlang:whereis(SupName),
-                       case riak_core:health_check(App) of
-                           undefined ->
-                               riak_core_node_watcher:service_up(App, SupPid);
-                           HealthMFA ->
-                               riak_core_node_watcher:service_up(App,
-                                                                 SupPid,
-                                                                 HealthMFA)
+                       case locate_supervisor(App) of
+                           {ok, SupPid} ->
+                               case riak_core:health_check(App) of
+                                   undefined ->
+                                       riak_core_node_watcher:service_up(App, SupPid);
+                                   HealthMFA ->
+                                       riak_core_node_watcher:service_up(App,
+                                                                         SupPid,
+                                                                         HealthMFA)
+                               end;
+                           {error, not_found} ->
+                               error_logger:info_msg("Skipping service_up for ~p. Top-level supervisor not found.", [App])
                        end,
                        exit(normal)
                end),
@@ -219,4 +222,27 @@ maybe_stop_vnode_proxies(Ring) ->
             ok;
         _ ->
             ok
+    end.
+
+locate_supervisor(App) ->
+    %% Does application store it's top-level supervisor in
+    %% env?
+    case application:get_env(App, top_supervisor) of
+        {ok, SupName} ->
+            case erlang:whereis(SupName) of
+                undefined ->
+                    {error, not_found};
+                Pid ->
+                    {ok, Pid}
+            end;
+        %% Env entry is missing so let's see if the app follows normal naming
+        %% conventions
+        undefined ->
+            SupName = list_to_atom(atom_to_list(App) ++ "_sup"),
+            case erlang:whereis(SupName) of
+                undefined ->
+                    {error, not_found};
+                Pid ->
+                    {ok, Pid}
+            end
     end.
