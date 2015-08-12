@@ -231,8 +231,6 @@ locate_supervisor(App) ->
         {ok, SupName} ->
             case erlang:whereis(SupName) of
                 undefined ->
-                    {error, not_found};
-                Pid ->
                     error_logger:info_msg("top_supervisor '~p' isn't running!", [SupName]),
                     {error, not_found};
                 Pid ->
