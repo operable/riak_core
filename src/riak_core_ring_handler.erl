@@ -233,16 +233,23 @@ locate_supervisor(App) ->
                 undefined ->
                     {error, not_found};
                 Pid ->
+                    error_logger:info_msg("top_supervisor '~p' isn't running!", [SupName]),
+                    {error, not_found};
+                Pid ->
+                    error_logger:info_msg("top_supervisor '~p' running as process ~p", [SupName, Pid]),
                     {ok, Pid}
             end;
         %% Env entry is missing so let's see if the app follows normal naming
         %% conventions
         undefined ->
+            error_logger:info_msg("top_supervisor config key missing. Attempting to infer supervisor name."),
             SupName = list_to_atom(atom_to_list(App) ++ "_sup"),
             case erlang:whereis(SupName) of
                 undefined ->
+                    error_logger:info_msg("Inferred supervisor '~p' not found!", [SupName]),
                     {error, not_found};
                 Pid ->
+                    error_logger:info_msg("Inferred supervisor '~p' running as process ~p", [SupName, Pid]),
                     {ok, Pid}
             end
     end.
