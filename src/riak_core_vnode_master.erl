@@ -25,7 +25,7 @@
 -module(riak_core_vnode_master).
 -include("riak_core_vnode.hrl").
 -behaviour(gen_server).
--export([start_link/1, start_link/2, start_link/3, get_vnode_pid/2,
+-export([start_link/1, start_link/2, start_link/3, start_link/4, get_vnode_pid/2,
          start_vnode/2,
          command/3, command/4,
          command_unreliable/3, command_unreliable/4,
@@ -35,7 +35,7 @@
          sync_spawn_command/3, make_request/3,
          make_coverage_request/4, all_nodes/1, reg_name/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-	 terminate/2, code_change/3]).
+         terminate/2, code_change/3]).
 -record(state, {idxtab, sup_name, vnode_mod, legacy}).
 
 -define(LONG_TIMEOUT, 120*1000).
@@ -58,6 +58,10 @@ start_link(VNodeMod, LegacyMod, Service) ->
     RegName = reg_name(VNodeMod),
     gen_server:start_link({local, RegName}, ?MODULE,
                           [Service,VNodeMod,LegacyMod,RegName], []).
+
+start_link(RegName, VNodeMod, LegacyMod, Service) ->
+  gen_server:start_link({local, RegName}, ?MODULE,
+                        [Service,VNodeMod,LegacyMod,RegName], []).
 
 start_vnode(Index, VNodeMod) ->
     riak_core_vnode_manager:start_vnode(Index, VNodeMod).
@@ -105,14 +109,14 @@ coverage(Msg, CoverageVNodes, Keyspaces, {Type, Ref, From}, VMaster)
   when is_list(CoverageVNodes) ->
     [proxy_cast({VMaster, Node},
                 make_coverage_request(Msg,
-                                      Keyspaces, 
+                                      Keyspaces,
                                       {Type, {Ref, {Index, Node}}, From},
                                       Index)) ||
         {Index, Node} <- CoverageVNodes];
 coverage(Msg, {Index, Node}, Keyspaces, Sender, VMaster) ->
     proxy_cast({VMaster, Node},
                make_coverage_request(Msg, Keyspaces, Sender, Index)).
-    
+
 %% Send the command to an individual Index/Node combination, but also
 %% return the pid for the vnode handling the request, as `{ok,
 %% VnodePid}'.
